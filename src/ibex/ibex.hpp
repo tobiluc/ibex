@@ -2,8 +2,9 @@
 
 #include <iostream>
 #include <vector>
-#include <cctype>
+#include <unordered_map>
 #include <string>
+#include <functional>
 
 namespace ibex
 {
@@ -17,7 +18,7 @@ struct Token
 
     enum class Type : unsigned char
     {
-        UNKNOWN, END,
+        UNKNOWN,
         INT, FLOAT, IDENTIFIER,
         COMMA, LPAREN, RPAREN,
         PLUS, MINUS, TIMES, DIV, POW,
@@ -26,19 +27,16 @@ struct Token
         EQ, NEQ, LEQ, GEQ, LESS, GREATER
     };
 
-    Token::Type type;
-    std::string lexeme;
+    Token::Type type = Type::UNKNOWN;
+    std::string lexeme = "";
     u_int64_t metadata = 0;
 
-    static const Token UNKNOWN;
-    static const Token END;
+    inline bool operator==(const Token& t) const {
+        return type == t.type && lexeme == t.lexeme && metadata == t.metadata;
+    }
 };
 
-inline std::ostream& operator<<(std::ostream& os, const Token& token)
-{
-    os << "Token(" << (int)(token.type) << ", \"" << token.lexeme << "\", " << token.metadata  <<")";
-    return os;
-}
+std::ostream& operator<<(std::ostream& os, const Token& token);
 
 std::vector<Token> tokenize(const char* text);
 

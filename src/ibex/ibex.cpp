@@ -7,8 +7,16 @@ namespace ibex
 /// Tokens
 ///==================
 
-const Token Token::UNKNOWN = Token{.type = Token::Type::UNKNOWN, .lexeme = ""};
-const Token Token::END = Token{.type = Token::Type::END, .lexeme = ""};
+static const Token UNKNOWN_TOKEN = Token{.type = Token::Type::UNKNOWN, .lexeme = ""};
+
+std::ostream& operator<<(std::ostream& os, const Token& token)
+{
+    os << "Token("
+       << static_cast<int>(token.type)
+       << ", \"" << token.lexeme << "\", "
+       << token.metadata  <<")";
+    return os;
+}
 
 static bool is_binary_operator(const Token& token) {
     return token.type == Token::Type::PLUS ||
@@ -51,19 +59,29 @@ std::vector<Token> tokenize(const char* text)
         if (std::isdigit(*p))
         {
             const char* start = p;
-            while (std::isdigit(*p)) ++p;
+            while (std::isdigit(*p)) {++p;}
 
             // Dot (.) indicates Decimal
-            if (*p == '.')
-            {
+            Token::Type type = Token::Type::INT;
+            if (*p == '.') {
                 ++p;
-                while (std::isdigit(*p)) ++p;
-                tokens.push_back({Token::Type::FLOAT, std::string(start, p)});
+                while (std::isdigit(*p)) {++p;}
+                type = Token::Type::FLOAT;
             }
-            else
-            {
-                tokens.push_back({Token::Type::INT, std::string(start, p)});
+
+            // 'e' indicates scientific notation
+            if (*p == 'e') {
+                ++p;
+                if (*p == '-') {++p;}
+                if (!std::isdigit(*p)) {
+                    std::cerr << "Exponent has no digits!" << std::endl;
+                    return {};
+                }
+                while (std::isdigit(*p)) {++p;}
             }
+
+            tokens.push_back({type, std::string(start, p)});
+
             continue;
         }
 
@@ -87,7 +105,7 @@ std::vector<Token> tokenize(const char* text)
         case '/': tokens.push_back({Token::Type::DIV, "/"}); break;
         case '^': tokens.push_back({Token::Type::POW, "^"}); break;
 
-            // Can be unary or binary
+        // Can be unary or binary
         case '+':
         case '-':
             // Check if we have a unary operator (after an operator)
@@ -101,7 +119,7 @@ std::vector<Token> tokenize(const char* text)
             if (*p == '-') {tokens.push_back({unary? Token::Type::UNARY_MINUS : Token::Type::MINUS, "-"}); break;}
 
 
-            // Tokens consisting of more than one symbol
+        // Tokens consisting of more than one symbol
         case '!':
             if (*(p+1)=='=') {++p; tokens.push_back({Token::Type::NEQ, "!="});}
             else {tokens.push_back({Token::Type::NOT, "!"});}
@@ -201,10 +219,10 @@ void register_commons(Variables &vars, Functions& funcs)
 
 struct OpInfo {
     int precedence = -1;
-    bool rightAssociative = false;
+    bool right_associative = false;
 };
 
-std::unordered_map<Token::Type, OpInfo> opTable = {
+static std::unordered_map<Token::Type, OpInfo> opTable = {
     {Token::Type::UNARY_PLUS, {7, true}}, {Token::Type::UNARY_MINUS, {7, true}},
     {Token::Type::PLUS, {4, false}}, {Token::Type::MINUS, {4, false}},
     {Token::Type::TIMES, {5, false}}, {Token::Type::DIV, {5, false}},
@@ -222,7 +240,7 @@ inline int precedence(Token::Type type) {
 
 static bool is_right_associative(Token::Type type) {
     auto it = opTable.find(type);
-    return it != opTable.end() && it->second.rightAssociative;
+    return it != opTable.end() && it->second.right_associative;
 };
 
 std::vector<Token> generate_postfix(const std::vector<Token>& tokens)
@@ -234,7 +252,7 @@ std::vector<Token> generate_postfix(const std::vector<Token>& tokens)
 
     for (size_t i = 0; i < tokens.size(); ++i)
     {
-#define NEXTTOKEN ((i+1 < tokens.size())? tokens[i+1] : Token::UNKNOWN)
+#define NEXTTOKEN ((i+1 < tokens.size())? tokens[i+1] : UNKNOWN_TOKEN)
 
         const Token& token = tokens[i];
         switch (token.type)
@@ -315,7 +333,7 @@ std::vector<Token> generate_postfix(const std::vector<Token>& tokens)
                     }
                 }
                 opStack.push_back(token);
-            } else if (token.type != Token::Type::END) {
+            } else {
                 std::cerr << "Unexpected token: " << token.lexeme << std::endl;
                 return {};
             }
@@ -344,15 +362,19 @@ double evaluate(const std::vector<Token>& postfix, const Variables& vars, const 
 {
     std::vector<double> stack;
 
-    for (const Token& token : postfix) {
-        switch (token.type) {
+    for (const Token& token : postfix)
+    {
+        switch (token.type)
+        {
         case Token::Type::INT:
-        case Token::Type::FLOAT: {
+        case Token::Type::FLOAT:
+        {
             stack.push_back(std::stod(token.lexeme));
             break;
         }
 
-        case Token::Type::IDENTIFIER: {
+        case Token::Type::IDENTIFIER:
+        {
             // Look for variable
             auto it = vars.find(token.lexeme);
             if (it != vars.end()) {
@@ -390,7 +412,8 @@ double evaluate(const std::vector<Token>& postfix, const Variables& vars, const 
         case Token::Type::GREATER:
         case Token::Type::GEQ:
         case Token::Type::LAND:
-        case Token::Type::LOR: {
+        case Token::Type::LOR:
+        {
             if (stack.size() < 2) {
                 std::cerr << "Insufficient operands for binary operator " << token.lexeme << std::endl;
                 return 0.0;
@@ -444,13 +467,13 @@ double evaluate(const std::vector<Token>& postfix, const Variables& vars, const 
         }
 
         default:
-            std::cerr << "Unexpected token in RPN: " << token.lexeme << std::endl;
+            std::cerr << "Unexpected token in postfix notation: " << token.lexeme << std::endl;
             return 0.0;
         }
     }
 
     if (stack.size() != 1) {
-        std::cerr << "Invalid RPN expression: stack size != 1" << std::endl;
+        std::cerr << "Invalid postfix expression: stack size != 1" << std::endl;
         return 0.0;
     }
 
@@ -459,12 +482,10 @@ double evaluate(const std::vector<Token>& postfix, const Variables& vars, const 
 
 double evaluate(const char* text)
 {
-    auto tokens = tokenize(text);
-    auto postfix = generate_postfix(tokens);
     Variables vars;
     Functions funcs;
     register_commons(vars, funcs);
-    return evaluate(postfix, vars, funcs);
+    return evaluate(generate_postfix(tokenize(text)), vars, funcs);
 }
 
 }
