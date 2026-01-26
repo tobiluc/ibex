@@ -71,6 +71,7 @@ std::vector<Token> tokenize(const char* text)
 
             // 'e' indicates scientific notation
             if (*p == 'e') {
+                type = Token::Type::FLOAT;
                 ++p;
                 if (*p == '-') {++p;}
                 if (!std::isdigit(*p)) {
@@ -367,8 +368,7 @@ double evaluate(const std::vector<Token>& postfix, const Variables& vars, const 
         switch (token.type)
         {
         case Token::Type::INT:
-        case Token::Type::FLOAT:
-        {
+        case Token::Type::FLOAT: {
             stack.push_back(std::stod(token.lexeme));
             break;
         }
