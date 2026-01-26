@@ -1,0 +1,473 @@
+#include <ibex/ibex.hpp>
+
+namespace ibex
+{
+
+///==================
+/// Tokens
+///==================
+
+const Token Token::UNKNOWN = Token{.type = Token::Type::UNKNOWN, .lexeme = ""};
+const Token Token::END = Token{.type = Token::Type::END, .lexeme = ""};
+
+static bool is_binary_operator(const Token& token) {
+    return token.type == Token::Type::PLUS ||
+           token.type == Token::Type::MINUS ||
+           token.type == Token::Type::TIMES ||
+           token.type == Token::Type::DIV ||
+           token.type == Token::Type::LAND ||
+           token.type == Token::Type::LOR ||
+           token.type == Token::Type::EQ ||
+           token.type == Token::Type::NEQ ||
+           token.type == Token::Type::LEQ ||
+           token.type == Token::Type::LESS ||
+           token.type == Token::Type::GEQ ||
+           token.type == Token::Type::GREATER ||
+           token.type == Token::Type::POW;
+}
+
+static bool is_unary_operator(const Token& token) {
+    return token.type == Token::Type::NOT ||
+           token.type == Token::Type::UNARY_PLUS ||
+           token.type == Token::Type::UNARY_MINUS;
+}
+
+std::vector<Token> tokenize(const char* text)
+{
+    std::vector<Token> tokens;
+    const char* p = text;
+    bool unary = false;
+
+    while (*p)
+    {
+        // Skip Whitespace between Tokens
+        if (std::isspace(*p))
+        {
+            ++p;
+            continue;
+        }
+
+        // Numbers (Integers or Decimals)
+        if (std::isdigit(*p))
+        {
+            const char* start = p;
+            while (std::isdigit(*p)) ++p;
+
+            // Dot (.) indicates Decimal
+            if (*p == '.')
+            {
+                ++p;
+                while (std::isdigit(*p)) ++p;
+                tokens.push_back({Token::Type::FLOAT, std::string(start, p)});
+            }
+            else
+            {
+                tokens.push_back({Token::Type::INT, std::string(start, p)});
+            }
+            continue;
+        }
+
+        // Identifiers
+        if (std::isalpha(*p) || *p == '_')
+        {
+            const char* start = p;
+            while (std::isalnum(*p) || *p == '_') ++p;
+            tokens.push_back({Token::Type::IDENTIFIER, std::string(start, p)});
+            continue;
+        }
+
+        // Tokens
+        switch (*p)
+        {
+        // Single symbols
+        case ',': tokens.push_back({Token::Type::COMMA, ","}); break;
+        case '(': tokens.push_back({Token::Type::LPAREN, "("}); break;
+        case ')': tokens.push_back({Token::Type::RPAREN, ")"}); break;
+        case '*': tokens.push_back({Token::Type::TIMES, "*"}); break;
+        case '/': tokens.push_back({Token::Type::DIV, "/"}); break;
+        case '^': tokens.push_back({Token::Type::POW, "^"}); break;
+
+            // Can be unary or binary
+        case '+':
+        case '-':
+            // Check if we have a unary operator (after an operator)
+            if (!tokens.empty()) {
+                const auto& prev = tokens.back();
+                unary = prev.type == Token::Type::LPAREN ||
+                        prev.type == Token::Type::COMMA ||
+                        is_unary_operator(prev) || is_binary_operator(prev);
+            } else {unary = true;} // first token is unary
+            if (*p == '+') {tokens.push_back({unary? Token::Type::UNARY_PLUS : Token::Type::PLUS, "+"}); break;}
+            if (*p == '-') {tokens.push_back({unary? Token::Type::UNARY_MINUS : Token::Type::MINUS, "-"}); break;}
+
+
+            // Tokens consisting of more than one symbol
+        case '!':
+            if (*(p+1)=='=') {++p; tokens.push_back({Token::Type::NEQ, "!="});}
+            else {tokens.push_back({Token::Type::NOT, "!"});}
+            break;
+        case '<':
+            if (*(p+1)=='=') {++p; tokens.push_back({Token::Type::LEQ, "<="});}
+            else {tokens.push_back({Token::Type::LESS, "<"});}
+            break;
+        case '>':
+            if (*(p+1)=='=') {++p; tokens.push_back({Token::Type::GEQ, ">="});}
+            else {tokens.push_back({Token::Type::GREATER, ">"});}
+            break;
+        case '=':
+            if (*(p+1)=='=') {++p; tokens.push_back({Token::Type::EQ, "=="}); break;}
+        case '|':
+            if (*(p+1)=='|') {++p; tokens.push_back({Token::Type::LOR, "||"}); break;}
+        case '&':
+            if (*(p+1)=='&') {++p; tokens.push_back({Token::Type::LAND, "&&"}); break;}
+        default: tokens.push_back({Token::Type::UNKNOWN, std::string(1, *p)}); break;
+        }
+
+        // Advance Character
+        ++p;
+    }
+
+    return tokens;
+}
+
+///==================
+/// Functions
+///==================
+
+void register_commons(Variables &vars, Functions& funcs)
+{
+    vars["pi"] = M_PI;
+    vars["e"] = M_E;
+
+    funcs["abs"] = [](const FunctionArgs& args) {
+        if (args.size() != 1) {std::cerr << "abs expects 1 argument" << std::endl; return 0.0;}
+        return std::abs(args[0]);
+    };
+
+    funcs["sin"] = [](const FunctionArgs& args) {
+        if (args.size() != 1) {std::cerr << "sin expects 1 argument" << std::endl; return 0.0;}
+        return std::sin(args[0]);
+    };
+
+    funcs["cos"] = [](const FunctionArgs& args) {
+        if (args.size() != 1) {std::cerr << "cos expects 1 argument" << std::endl; return 0.0;}
+        return std::cos(args[0]);
+    };
+
+    funcs["exp"] = [](const FunctionArgs& args) {
+        if (args.size() != 1) {std::cerr << "exp expects 1 argument" << std::endl; return 0.0;}
+        return std::exp(args[0]);
+    };
+
+    funcs["log"] = [](const FunctionArgs& args) {
+        if (args.size() != 1) {std::cerr << "log expects 1 argument" << std::endl; return 0.0;}
+        return std::log(args[0]);
+    };
+    funcs["ln"] = funcs["log"];
+
+    funcs["log2"] = [](const FunctionArgs& args) {
+        if (args.size() != 1) {std::cerr << "log2 expects 1 argument" << std::endl; return 0.0;}
+        return std::log2(args[0]);
+    };
+
+    funcs["sqrt"] = [](const FunctionArgs& args) {
+        if (args.size() != 1) {std::cerr << "sqrt expects 1 argument" << std::endl; return 0.0;}
+        return std::sqrt(args[0]);
+    };
+
+    funcs["max"] = [](const FunctionArgs& args) {
+        if (args.size() == 0) {std::cerr << "max expects at least 1 argument" << std::endl; return 0.0;}
+        double max = -std::numeric_limits<double>::infinity();
+        for (const auto& arg : args) {if (arg > max) {max = arg;}}
+        return max;
+    };
+
+    funcs["min"] = [](const FunctionArgs& args) {
+        if (args.size() == 0) {std::cerr << "min expects at least 1 argument" << std::endl; return 0.0;}
+        double min = std::numeric_limits<double>::infinity();
+        for (const auto& arg : args) {if (arg < min) {min = arg;}}
+        return min;
+    };
+
+    funcs["pow"] = [](const FunctionArgs& args) {
+        if (args.size() != 2) {std::cerr << "pow expects 2 arguments" << std::endl; return 0.0;}
+        return std::pow(args[0], args[1]);
+    };
+}
+
+///==================
+/// Reverse Polish
+///==================
+
+struct OpInfo {
+    int precedence = -1;
+    bool rightAssociative = false;
+};
+
+std::unordered_map<Token::Type, OpInfo> opTable = {
+    {Token::Type::UNARY_PLUS, {7, true}}, {Token::Type::UNARY_MINUS, {7, true}},
+    {Token::Type::PLUS, {4, false}}, {Token::Type::MINUS, {4, false}},
+    {Token::Type::TIMES, {5, false}}, {Token::Type::DIV, {5, false}},
+    {Token::Type::POW, {8, true}},
+    {Token::Type::LAND, {2, false}}, {Token::Type::LOR, {1, false}},
+    {Token::Type::NOT, {7, true}},
+    {Token::Type::EQ, {3, false}}, {Token::Type::NEQ, {3, false}}, {Token::Type::LESS, {3, false}},
+    {Token::Type::GREATER, {3, false}}, {Token::Type::LEQ, {3, false}}, {Token::Type::GEQ, {3, false}}
+};
+
+inline int precedence(Token::Type type) {
+    auto it = opTable.find(type);
+    return it != opTable.end() ? it->second.precedence : -1;
+};
+
+static bool is_right_associative(Token::Type type) {
+    auto it = opTable.find(type);
+    return it != opTable.end() && it->second.rightAssociative;
+};
+
+RPN generate_reverse_polish(const std::vector<Token>& tokens)
+{
+    // rpn stores a std::vector<Token> tokens or whatever else is required by an evaluator
+    RPN rpn;
+
+    std::vector<Token> output;
+    std::vector<Token> opStack;
+    std::vector<uint> nargStack;
+
+    for (size_t i = 0; i < tokens.size(); ++i)
+    {
+#define NEXTTOKEN ((i+1 < tokens.size())? tokens[i+1] : Token::UNKNOWN)
+
+        const Token& token = tokens[i];
+        switch (token.type)
+        {
+        case Token::Type::INT:
+        case Token::Type::FLOAT:
+            output.push_back(token);
+            break;
+
+        case Token::Type::IDENTIFIER:
+            if (NEXTTOKEN.type == Token::Type::LPAREN) {
+                opStack.push_back(token); // Function Name
+            } else {
+                output.push_back(token); // Variable
+            }
+            break;
+
+        case Token::Type::COMMA:
+            // Pop until left parenthesis
+            while (!opStack.empty() && opStack.back().type != Token::Type::LPAREN) {
+                output.push_back(opStack.back());
+                opStack.pop_back();
+            }
+            // Increment arg count if tracking
+            if (!nargStack.empty()) {++nargStack.back();}
+            break;
+
+        case Token::Type::LPAREN:
+            // If function name is at the top of opStack, this is a function call
+            opStack.push_back(token);
+            if (!opStack.empty() && opStack.size() >= 2 &&
+                opStack[opStack.size() - 2].type == Token::Type::IDENTIFIER) {
+
+                // Start counting args
+                if (NEXTTOKEN.type == Token::Type::RPAREN) {nargStack.push_back(0);} // function has no args
+                else {nargStack.push_back(1);}
+
+            }
+            break;
+
+        case Token::Type::RPAREN:
+            // Pop until left parenthesis
+            while (!opStack.empty() && opStack.back().type != Token::Type::LPAREN) {
+                output.push_back(opStack.back());
+                opStack.pop_back();
+            }
+            if (opStack.empty()) {
+                std::cerr << "Mismatched parentheses" << std::endl;
+                return rpn;
+            }
+            opStack.pop_back(); // Pop the LPAREN
+
+            // If function name is next on stack, pop it to output
+            if (!opStack.empty() && opStack.back().type == Token::Type::IDENTIFIER) {
+                Token func = opStack.back();
+                opStack.pop_back();
+                func.metadata = nargStack.back(); // Attach number of args to token
+                output.push_back(func);
+                nargStack.pop_back();
+            }
+            break;
+
+        default:
+            if (opTable.find(token.type) != opTable.end()) {
+                while (!opStack.empty()) {
+                    const Token& top = opStack.back();
+                    if (opTable.find(top.type) == opTable.end()) break;
+
+                    int prec1 = precedence(token.type);
+                    int prec2 = precedence(top.type);
+                    bool rightAssoc = is_right_associative(token.type);
+
+                    if ((rightAssoc && prec1 < prec2) || (!rightAssoc && prec1 <= prec2)) {
+                        output.push_back(top);
+                        opStack.pop_back();
+                    } else {
+                        break;
+                    }
+                }
+                opStack.push_back(token);
+            } else if (token.type != Token::Type::END) {
+                std::cerr << "Unexpected token: " << token.lexeme << std::endl;
+                return rpn;
+            }
+            break;
+        }
+    }
+
+    // Pop remaining operators
+    while (!opStack.empty()) {
+        if (opStack.back().type == Token::Type::LPAREN || opStack.back().type == Token::Type::RPAREN) {
+            std::cerr << "Mismatched parentheses in expression." << std::endl;
+            return rpn;
+        }
+        output.push_back(opStack.back());
+        opStack.pop_back();
+    }
+
+    rpn.tokens = std::move(output);
+    return rpn;
+}
+
+///==================
+/// Evaluation
+///==================
+
+double evaluate(const RPN& rpn, const Variables& vars, const Functions& funcs)
+{
+    std::vector<double> stack;
+
+    for (const Token& token : rpn.tokens) {
+        switch (token.type) {
+        case Token::Type::INT:
+        case Token::Type::FLOAT: {
+            stack.push_back(std::stod(token.lexeme));
+            break;
+        }
+
+        case Token::Type::IDENTIFIER: {
+            // Look for variable
+            auto it = vars.find(token.lexeme);
+            if (it != vars.end()) {
+                stack.push_back(it->second);
+                break;
+            }
+
+            // Otherwise, treat it as a function
+            auto fit = funcs.find(token.lexeme);
+            if (fit == funcs.end()) {
+                std::cerr << "Unknown variable or function: " << token.lexeme << std::endl;
+                return 0.0;
+            }
+
+            // The number of arguments is stored in the token metadata
+            std::vector<double> args;
+            for (uint narg = 0; narg < token.metadata; ++narg) {
+                args.push_back(stack.back());
+                stack.pop_back();
+            }
+            double result = fit->second(args);
+            stack.push_back(result);
+            break;
+        }
+
+        case Token::Type::PLUS:
+        case Token::Type::MINUS:
+        case Token::Type::TIMES:
+        case Token::Type::DIV:
+        case Token::Type::POW:
+        case Token::Type::EQ:
+        case Token::Type::NEQ:
+        case Token::Type::LESS:
+        case Token::Type::LEQ:
+        case Token::Type::GREATER:
+        case Token::Type::GEQ:
+        case Token::Type::LAND:
+        case Token::Type::LOR: {
+            if (stack.size() < 2) {
+                std::cerr << "Insufficient operands for binary operator " << token.lexeme << std::endl;
+                return 0.0;
+            }
+
+            double rhs = stack.back(); stack.pop_back();
+            double lhs = stack.back(); stack.pop_back();
+            double result;
+
+            switch (token.type) {
+            case Token::Type::PLUS: result = lhs + rhs; break;
+            case Token::Type::MINUS: result = lhs - rhs; break;
+            case Token::Type::TIMES: result = lhs * rhs; break;
+            case Token::Type::DIV: result = lhs / rhs; break;
+            case Token::Type::POW: result = std::pow(lhs, rhs); break;
+            case Token::Type::EQ: result = lhs == rhs; break;
+            case Token::Type::NEQ: result = lhs != rhs; break;
+            case Token::Type::LESS: result = lhs < rhs; break;
+            case Token::Type::LEQ: result = lhs <= rhs; break;
+            case Token::Type::GREATER: result = lhs > rhs; break;
+            case Token::Type::GEQ: result = lhs >= rhs; break;
+            case Token::Type::LAND: result = (lhs != 0.0 && rhs != 0.0); break;
+            case Token::Type::LOR:  result = (lhs != 0.0 || rhs != 0.0); break;
+            default: std::cerr << "Unhandled binary operator " << token.lexeme << std::endl; return 0.0;
+            }
+
+            stack.push_back(result);
+            break;
+        }
+
+        case Token::Type::UNARY_PLUS:
+        case Token::Type::UNARY_MINUS:
+        case Token::Type::NOT: {
+            if (stack.empty()) {
+                std::cerr << "Insufficient operands for unary operator " << token.lexeme << std::endl;
+                return 0.0;
+            }
+            double val = stack.back();
+            stack.pop_back();
+            double result;
+
+            switch (token.type) {
+            case Token::Type::UNARY_PLUS: result = val; break;
+            case Token::Type::UNARY_MINUS: result = -val; break;
+            case Token::Type::NOT: result = !val; break;
+            default: std::cerr << "Unhandled unary operator " << token.lexeme << std::endl; return 0.0;
+            }
+
+            stack.push_back(result);
+            break;
+        }
+
+        default:
+            std::cerr << "Unexpected token in RPN: " << token.lexeme << std::endl;
+            return 0.0;
+        }
+    }
+
+    if (stack.size() != 1) {
+        std::cerr << "Invalid RPN expression: stack size != 1" << std::endl;
+        return 0.0;
+    }
+
+    return stack.back();
+}
+
+double evaluate(const char* text)
+{
+    auto tokens = tokenize(text);
+    auto rpn = generate_reverse_polish(tokens);
+    Variables vars;
+    Functions funcs;
+    register_commons(vars, funcs);
+    return evaluate(rpn, vars, funcs);
+}
+
+}
