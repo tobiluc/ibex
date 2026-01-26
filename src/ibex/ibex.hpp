@@ -53,21 +53,16 @@ using Functions = std::unordered_map<std::string, FunctionImpl>;
 void register_commons(Variables& vars, Functions& funcs);
 
 ///==================
-/// Reverse Polish
+///  Postfix
 ///==================
 
-struct RPN
-{
-    std::vector<Token> tokens;
-};
-
-RPN generate_reverse_polish(const std::vector<Token>& tokens);
+std::vector<Token> generate_postfix(const std::vector<Token>& tokens);
 
 ///==================
 /// Evaluation
 ///==================
 
-double evaluate(const RPN& rpn, const Variables& vars, const Functions& funcs);
+double evaluate(const std::vector<Token>& postfix, const Variables& vars, const Functions& funcs);
 
 double evaluate(const char* text);
 

@@ -225,11 +225,9 @@ static bool is_right_associative(Token::Type type) {
     return it != opTable.end() && it->second.rightAssociative;
 };
 
-RPN generate_reverse_polish(const std::vector<Token>& tokens)
+std::vector<Token> generate_postfix(const std::vector<Token>& tokens)
 {
     // rpn stores a std::vector<Token> tokens or whatever else is required by an evaluator
-    RPN rpn;
-
     std::vector<Token> output;
     std::vector<Token> opStack;
     std::vector<uint> nargStack;
@@ -285,7 +283,7 @@ RPN generate_reverse_polish(const std::vector<Token>& tokens)
             }
             if (opStack.empty()) {
                 std::cerr << "Mismatched parentheses" << std::endl;
-                return rpn;
+                return {};
             }
             opStack.pop_back(); // Pop the LPAREN
 
@@ -319,7 +317,7 @@ RPN generate_reverse_polish(const std::vector<Token>& tokens)
                 opStack.push_back(token);
             } else if (token.type != Token::Type::END) {
                 std::cerr << "Unexpected token: " << token.lexeme << std::endl;
-                return rpn;
+                return {};
             }
             break;
         }
@@ -329,25 +327,24 @@ RPN generate_reverse_polish(const std::vector<Token>& tokens)
     while (!opStack.empty()) {
         if (opStack.back().type == Token::Type::LPAREN || opStack.back().type == Token::Type::RPAREN) {
             std::cerr << "Mismatched parentheses in expression." << std::endl;
-            return rpn;
+            return {};
         }
         output.push_back(opStack.back());
         opStack.pop_back();
     }
 
-    rpn.tokens = std::move(output);
-    return rpn;
+    return output;
 }
 
 ///==================
 /// Evaluation
 ///==================
 
-double evaluate(const RPN& rpn, const Variables& vars, const Functions& funcs)
+double evaluate(const std::vector<Token>& postfix, const Variables& vars, const Functions& funcs)
 {
     std::vector<double> stack;
 
-    for (const Token& token : rpn.tokens) {
+    for (const Token& token : postfix) {
         switch (token.type) {
         case Token::Type::INT:
         case Token::Type::FLOAT: {
@@ -463,11 +460,11 @@ double evaluate(const RPN& rpn, const Variables& vars, const Functions& funcs)
 double evaluate(const char* text)
 {
     auto tokens = tokenize(text);
-    auto rpn = generate_reverse_polish(tokens);
+    auto postfix = generate_postfix(tokens);
     Variables vars;
     Functions funcs;
     register_commons(vars, funcs);
-    return evaluate(rpn, vars, funcs);
+    return evaluate(postfix, vars, funcs);
 }
 
 }
