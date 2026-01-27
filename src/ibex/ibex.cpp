@@ -1,4 +1,5 @@
 #include <ibex/ibex.hpp>
+#include <variant>
 
 namespace ibex
 {
@@ -19,7 +20,8 @@ std::ostream& operator<<(std::ostream& os, const Token& token)
 }
 
 static bool is_binary_operator(const Token& token) {
-    return token.type == Token::Type::PLUS ||
+    return token.type == Token::Type::ASSIGN ||
+           token.type == Token::Type::PLUS ||
            token.type == Token::Type::MINUS ||
            token.type == Token::Type::TIMES ||
            token.type == Token::Type::DIV ||
@@ -135,6 +137,7 @@ std::vector<Token> tokenize(const char* text)
             break;
         case '=':
             if (*(p+1)=='=') {++p; tokens.push_back({Token::Type::EQ, "=="}); break;}
+            else {tokens.push_back({Token::Type::ASSIGN, "="}); break;}
         case '|':
             if (*(p+1)=='|') {++p; tokens.push_back({Token::Type::LOR, "||"}); break;}
         case '&':
@@ -153,69 +156,85 @@ std::vector<Token> tokenize(const char* text)
 /// Functions
 ///==================
 
-void register_commons(Variables &vars, Functions& funcs)
+static double ERRD = std::numeric_limits<double>::quiet_NaN();
+
+Variables common_variables()
 {
+    Variables vars;
     vars["pi"] = M_PI;
     vars["e"] = M_E;
+    return vars;
+}
+
+Functions common_functions()
+{
+    Functions funcs;
 
     funcs["abs"] = [](const FunctionArgs& args) {
-        if (args.size() != 1) {std::cerr << "abs expects 1 argument" << std::endl; return 0.0;}
+        if (args.size() != 1) {std::cerr << "abs expects 1 argument" << std::endl; return ERRD;}
         return std::abs(args[0]);
     };
 
     funcs["sin"] = [](const FunctionArgs& args) {
-        if (args.size() != 1) {std::cerr << "sin expects 1 argument" << std::endl; return 0.0;}
+        if (args.size() != 1) {std::cerr << "sin expects 1 argument" << std::endl; return ERRD;}
         return std::sin(args[0]);
     };
 
     funcs["cos"] = [](const FunctionArgs& args) {
-        if (args.size() != 1) {std::cerr << "cos expects 1 argument" << std::endl; return 0.0;}
+        if (args.size() != 1) {std::cerr << "cos expects 1 argument" << std::endl; return ERRD;}
         return std::cos(args[0]);
     };
 
+    funcs["tan"] = [](const FunctionArgs& args) {
+        if (args.size() != 1) {std::cerr << "tan expects 1 argument" << std::endl; return ERRD;}
+        return std::tan(args[0]);
+    };
+
     funcs["exp"] = [](const FunctionArgs& args) {
-        if (args.size() != 1) {std::cerr << "exp expects 1 argument" << std::endl; return 0.0;}
+        if (args.size() != 1) {std::cerr << "exp expects 1 argument" << std::endl; return ERRD;}
         return std::exp(args[0]);
     };
 
     funcs["log"] = [](const FunctionArgs& args) {
-        if (args.size() != 1) {std::cerr << "log expects 1 argument" << std::endl; return 0.0;}
+        if (args.size() != 1) {std::cerr << "log expects 1 argument" << std::endl; return ERRD;}
         return std::log(args[0]);
     };
     funcs["ln"] = funcs["log"];
 
     funcs["log2"] = [](const FunctionArgs& args) {
-        if (args.size() != 1) {std::cerr << "log2 expects 1 argument" << std::endl; return 0.0;}
+        if (args.size() != 1) {std::cerr << "log2 expects 1 argument" << std::endl; return ERRD;}
         return std::log2(args[0]);
     };
 
     funcs["sqrt"] = [](const FunctionArgs& args) {
-        if (args.size() != 1) {std::cerr << "sqrt expects 1 argument" << std::endl; return 0.0;}
+        if (args.size() != 1) {std::cerr << "sqrt expects 1 argument" << std::endl; return ERRD;}
         return std::sqrt(args[0]);
     };
 
     funcs["max"] = [](const FunctionArgs& args) {
-        if (args.size() == 0) {std::cerr << "max expects at least 1 argument" << std::endl; return 0.0;}
+        if (args.size() == 0) {std::cerr << "max expects at least 1 argument" << std::endl; return ERRD;}
         double max = -std::numeric_limits<double>::infinity();
         for (const auto& arg : args) {if (arg > max) {max = arg;}}
         return max;
     };
 
     funcs["min"] = [](const FunctionArgs& args) {
-        if (args.size() == 0) {std::cerr << "min expects at least 1 argument" << std::endl; return 0.0;}
+        if (args.size() == 0) {std::cerr << "min expects at least 1 argument" << std::endl; return ERRD;}
         double min = std::numeric_limits<double>::infinity();
         for (const auto& arg : args) {if (arg < min) {min = arg;}}
         return min;
     };
 
     funcs["pow"] = [](const FunctionArgs& args) {
-        if (args.size() != 2) {std::cerr << "pow expects 2 arguments" << std::endl; return 0.0;}
+        if (args.size() != 2) {std::cerr << "pow expects 2 arguments" << std::endl; return ERRD;}
         return std::pow(args[0], args[1]);
     };
+
+    return funcs;
 }
 
 ///==================
-/// Reverse Polish
+/// Postfix
 ///==================
 
 struct OpInfo {
@@ -231,10 +250,11 @@ static std::unordered_map<Token::Type, OpInfo> opTable = {
     {Token::Type::LAND, {2, false}}, {Token::Type::LOR, {1, false}},
     {Token::Type::NOT, {7, true}},
     {Token::Type::EQ, {3, false}}, {Token::Type::NEQ, {3, false}}, {Token::Type::LESS, {3, false}},
-    {Token::Type::GREATER, {3, false}}, {Token::Type::LEQ, {3, false}}, {Token::Type::GEQ, {3, false}}
+    {Token::Type::GREATER, {3, false}}, {Token::Type::LEQ, {3, false}}, {Token::Type::GEQ, {3, false}},
+    {Token::Type::ASSIGN, {1, true}}
 };
 
-inline int precedence(Token::Type type) {
+static int precedence(Token::Type type) {
     auto it = opTable.find(type);
     return it != opTable.end() ? it->second.precedence : -1;
 };
@@ -359,15 +379,40 @@ std::vector<Token> generate_postfix(const std::vector<Token>& tokens)
 /// Evaluation
 ///==================
 
-double evaluate(const std::vector<Token>& postfix, const Variables& vars, const Functions& funcs)
-{
-    std::vector<double> stack;
+template<typename ... Ts>
+struct Overload : Ts ... {using Ts::operator() ...;};
+template<class... Ts> Overload(Ts...) -> Overload<Ts...>;
 
-    for (const Token& token : postfix)
+double eval_postfix(const std::vector<Token>& postfix, Variables &vars, Functions &funcs)
+{
+    using Atom = std::variant<double,int,std::string>;
+    std::vector<Atom> stack;
+    auto atom_to_d = [&](const Atom& _atom) -> double {
+        const auto visitor = Overload{
+            [](const double d){return d;},
+            [](const int i){return static_cast<double>(i);},
+            [&](const std::string& s){
+                if (!vars.contains(s)) {
+                    std::cerr << "Unknown variable: " << s << std::endl;
+                    return ERRD;
+                }
+                return vars.at(s);
+            }
+        };
+        return std::visit(visitor, _atom);
+    };
+
+    size_t n_tokens = postfix.size();
+    for (unsigned int token_i = 0; token_i < n_tokens; ++token_i)
     {
+        const Token& token = postfix[token_i];
+
         switch (token.type)
         {
-        case Token::Type::INT:
+        case Token::Type::INT: {
+            stack.push_back(std::stoi(token.lexeme));
+            break;
+        }
         case Token::Type::FLOAT: {
             stack.push_back(std::stod(token.lexeme));
             break;
@@ -375,28 +420,22 @@ double evaluate(const std::vector<Token>& postfix, const Variables& vars, const 
 
         case Token::Type::IDENTIFIER:
         {
-            // Look for variable
-            auto it = vars.find(token.lexeme);
-            if (it != vars.end()) {
-                stack.push_back(it->second);
+            // Check if it's a function
+            auto fit = funcs.find(token.lexeme);
+            if (fit != funcs.end()) {
+                // The number of arguments is stored in the token metadata
+                std::vector<double> args;
+                for (uint narg = 0; narg < token.metadata; ++narg) {
+                    args.push_back(atom_to_d(stack.back()));
+                    stack.pop_back();
+                }
+                double result = fit->second(args);
+                stack.push_back(result);
                 break;
             }
 
-            // Otherwise, treat it as a function
-            auto fit = funcs.find(token.lexeme);
-            if (fit == funcs.end()) {
-                std::cerr << "Unknown variable or function: " << token.lexeme << std::endl;
-                return 0.0;
-            }
-
-            // The number of arguments is stored in the token metadata
-            std::vector<double> args;
-            for (uint narg = 0; narg < token.metadata; ++narg) {
-                args.push_back(stack.back());
-                stack.pop_back();
-            }
-            double result = fit->second(args);
-            stack.push_back(result);
+            // Treat it as a variable
+            stack.push_back(token.lexeme);
             break;
         }
 
@@ -416,11 +455,11 @@ double evaluate(const std::vector<Token>& postfix, const Variables& vars, const 
         {
             if (stack.size() < 2) {
                 std::cerr << "Insufficient operands for binary operator " << token.lexeme << std::endl;
-                return 0.0;
+                return ERRD;
             }
 
-            double rhs = stack.back(); stack.pop_back();
-            double lhs = stack.back(); stack.pop_back();
+            double rhs = atom_to_d(stack.back()); stack.pop_back();
+            double lhs = atom_to_d(stack.back()); stack.pop_back();
             double result;
 
             switch (token.type) {
@@ -437,7 +476,9 @@ double evaluate(const std::vector<Token>& postfix, const Variables& vars, const 
             case Token::Type::GEQ: result = lhs >= rhs; break;
             case Token::Type::LAND: result = (lhs != 0.0 && rhs != 0.0); break;
             case Token::Type::LOR:  result = (lhs != 0.0 || rhs != 0.0); break;
-            default: std::cerr << "Unhandled binary operator " << token.lexeme << std::endl; return 0.0;
+            default:
+                std::cerr << "Unhandled binary operator " << token.lexeme << std::endl;
+                return ERRD;
             }
 
             stack.push_back(result);
@@ -449,9 +490,9 @@ double evaluate(const std::vector<Token>& postfix, const Variables& vars, const 
         case Token::Type::NOT: {
             if (stack.empty()) {
                 std::cerr << "Insufficient operands for unary operator " << token.lexeme << std::endl;
-                return 0.0;
+                return ERRD;
             }
-            double val = stack.back();
+            double val = atom_to_d(stack.back());
             stack.pop_back();
             double result;
 
@@ -466,26 +507,49 @@ double evaluate(const std::vector<Token>& postfix, const Variables& vars, const 
             break;
         }
 
+        case Token::Type::ASSIGN: {
+            double rhs = atom_to_d(stack.back()); stack.pop_back();
+            if (!std::holds_alternative<std::string>(stack.back())) {
+                std::cerr << "Expression is not assignable" << std::endl;
+                return ERRD;
+            }
+            std::string lhs = std::get<std::string>(stack.back()); stack.pop_back();
+            vars[lhs] = rhs;
+            stack.push_back(rhs);
+            break;
+        }
+
         default:
             std::cerr << "Unexpected token in postfix notation: " << token.lexeme << std::endl;
-            return 0.0;
+            return ERRD;
         }
     }
 
     if (stack.size() != 1) {
         std::cerr << "Invalid postfix expression: stack size != 1" << std::endl;
-        return 0.0;
+        return ERRD;
     }
 
-    return stack.back();
+    return atom_to_d(stack.back());
 }
 
-double evaluate(const char* text)
+double eval_postfix(const std::vector<Token>& _postfix)
 {
-    Variables vars;
-    Functions funcs;
-    register_commons(vars, funcs);
-    return evaluate(generate_postfix(tokenize(text)), vars, funcs);
+    Variables vars = common_variables();
+    Functions funcs = common_functions();
+    return eval_postfix(_postfix, vars, funcs);
+}
+
+double eval(const char* _text, Variables& _vars, Functions& _funcs)
+{
+    return eval_postfix(generate_postfix(tokenize(_text)), _vars, _funcs);
+}
+
+double eval(const char* _text)
+{
+    Variables vars = common_variables();
+    Functions funcs = common_functions();
+    return eval(_text, vars, funcs);
 }
 
 }

@@ -20,7 +20,7 @@ struct Token
     {
         UNKNOWN,
         INT, FLOAT, IDENTIFIER,
-        COMMA, LPAREN, RPAREN,
+        COMMA, LPAREN, RPAREN, ASSIGN,
         PLUS, MINUS, TIMES, DIV, POW,
         UNARY_PLUS, UNARY_MINUS,
         LOR, LAND, NOT,
@@ -48,7 +48,8 @@ using FunctionArgs = std::vector<double>;
 using FunctionImpl = std::function<double(const FunctionArgs&)>;
 using Functions = std::unordered_map<std::string, FunctionImpl>;
 
-void register_commons(Variables& vars, Functions& funcs);
+Variables common_variables();
+Functions common_functions();
 
 ///==================
 ///  Postfix
@@ -60,8 +61,12 @@ std::vector<Token> generate_postfix(const std::vector<Token>& tokens);
 /// Evaluation
 ///==================
 
-double evaluate(const std::vector<Token>& postfix, const Variables& vars, const Functions& funcs);
+double eval_postfix(const std::vector<Token>& _postfix, Variables& _vars, Functions& _funcs);
 
-double evaluate(const char* text);
+double eval_postfix(const std::vector<Token>& _postfix);
+
+double eval(const char* _text, Variables& _vars, Functions& _funcs);
+
+double eval(const char* _text);
 
 }
