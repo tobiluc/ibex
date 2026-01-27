@@ -30,3 +30,7 @@ funcs["argmax"] = [](const ibex::FunctionArgs& args) -> double {
 };
 ibex::eval("argmax(1,4,10,9)", vars, funcs); // = 2
 ```
+
+```console
+./ibex-cli "1 + 1/12"
+```

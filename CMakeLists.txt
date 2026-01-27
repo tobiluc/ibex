@@ -41,14 +41,21 @@ else()
 endif()
 
 #================================================
-# Add
+# Add Library
 #================================================
 add_library("${PROJECT_NAME}" STATIC
     src/ibex/ibex.hpp
     src/ibex/ibex.cpp
 )
-
 include_directories (${INCLUDE_DIRS})
+
+#=======================
+# Add command line tool
+#=======================
+if(IBEX_STANDALONE_BUILD)
+    add_executable(ibex_cli ibex-cli.cpp)
+    target_link_libraries(ibex_cli PRIVATE "${PROJECT_NAME}")
+endif()
 
 #=========================
 # Define what to include
