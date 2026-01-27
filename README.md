@@ -16,13 +16,6 @@ ibex::eval("x = 2", vars, funcs); // vars["x"] now holds the value 2
 ```
 
 ```cpp
-ibex::Variables vars;
-ibex::Functions funcs;
-funcs
-ibex::eval("x = 2", vars, funcs); // vars["x"] now holds the value 2
-```
-
-```cpp
 // Register a custom function
 ibex::Variables vars = common_variables(); // pi, e
 ibex::Functions funcs = common_functions(); // sin, cos, exp, ...
