@@ -429,6 +429,8 @@ double eval_postfix(const std::vector<Token>& postfix, Variables &vars, Function
                     args.push_back(atom_to_d(stack.back()));
                     stack.pop_back();
                 }
+                // Reverse args since it's in postfix notation
+                std::reverse(args.begin(), args.end());
                 double result = fit->second(args);
                 stack.push_back(result);
                 break;

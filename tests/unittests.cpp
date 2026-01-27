@@ -59,6 +59,25 @@ TEST(PipelineTest, FunctionsTest)
     EXPECT_NEAR(eval("exp(2)"), 7.38905609893, EPS);
     EXPECT_NEAR(eval("min(4,7,2,4)"), 2.0, EPS);
     EXPECT_NEAR(eval("max(4,-7,2,4)"), 4.0, EPS);
+    EXPECT_NEAR(eval("tan(x = pi)"), 0.0, EPS);
+    EXPECT_NEAR(eval("pow(2,3)"), 8, EPS);
+    EXPECT_NEAR(eval("pow(3,2)"), 9, EPS);
+}
+
+TEST(PipelineTest, ArgMaxTest)
+{
+    Variables vars = common_variables();
+    Functions funcs = common_functions();
+    funcs["argmax"] = [](const FunctionArgs& args) -> double {
+        int argmax(0);
+        for (int i = 0; i < args.size(); ++i) {
+            if (args[i] > args[argmax]) {
+                argmax = i;
+            }
+        }
+        return argmax;
+    };
+    EXPECT_NEAR(eval("argmax(1,4,10,9)", vars, funcs), 2, EPS);
 }
 
 TEST(PipelineTest, LogicalOperatorsTest)
