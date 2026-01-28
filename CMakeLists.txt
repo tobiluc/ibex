@@ -53,8 +53,8 @@ include_directories (${INCLUDE_DIRS})
 # Add command line tool
 #=======================
 if(IBEX_STANDALONE_BUILD)
-    add_executable(ibex_cli ibex-cli.cpp)
-    target_link_libraries(ibex_cli PRIVATE "${PROJECT_NAME}")
+    add_executable(ibex-cli ibex-cli.cpp)
+    target_link_libraries(ibex-cli PRIVATE "${PROJECT_NAME}")
 endif()
 
 #=========================
