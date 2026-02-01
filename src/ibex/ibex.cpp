@@ -251,7 +251,7 @@ static std::unordered_map<Token::Type, OpInfo> opTable = {
     {Token::Type::NOT, {7, true}},
     {Token::Type::EQ, {3, false}}, {Token::Type::NEQ, {3, false}}, {Token::Type::LESS, {3, false}},
     {Token::Type::GREATER, {3, false}}, {Token::Type::LEQ, {3, false}}, {Token::Type::GEQ, {3, false}},
-    {Token::Type::ASSIGN, {1, true}}
+    {Token::Type::ASSIGN, {0, true}}
 };
 
 static int precedence(Token::Type type) {
