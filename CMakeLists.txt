@@ -48,6 +48,7 @@ add_library("${PROJECT_NAME}" STATIC
     src/ibex/ibex.cpp
 )
 include_directories (${INCLUDE_DIRS})
+target_include_directories("${PROJECT_NAME}" PUBLIC src/ibex/ibex.hpp)
 
 #=======================
 # Add command line tool
